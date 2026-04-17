@@ -1,0 +1,40 @@
+name: Deploy Patient Service
+
+on:
+  push:
+    paths:
+      - 'api-gateway/**'
+
+env:
+  SERVICE_NAME: api-gateway
+  RESOURCE_GROUP: patient-management
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Azure Login
+        uses: azure/login@v1
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: ACR Login
+        run: |
+          echo "${{ secrets.ACR_PASSWORD }}" | docker login ${{ secrets.ACR_LOGIN_SERVER }} \
+            -u ${{ secrets.ACR_USERNAME }} --password-stdin
+
+      - name: Build & Push
+        run: |
+          cd api-gateway
+          docker build -t ${{ secrets.ACR_LOGIN_SERVER }}/api-gateway:${{ github.run_number }} .
+          docker push ${{ secrets.ACR_LOGIN_SERVER }}/api-gateway:${{ github.run_number }}
+
+      - name: Deploy
+        run: |
+          az containerapp update \
+            --name ${{ env.SERVICE_NAME }} \
+            --resource-group ${{ env.RESOURCE_GROUP }} \
+            --image ${{ secrets.ACR_LOGIN_SERVER }}/api-gateway:${{ github.run_number }}
